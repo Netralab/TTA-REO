@@ -1,4 +1,4 @@
-# TTA-REO simulation code
+# TTA-REO: Relational Entanglement Orchestration for Quantum Networks
 
 Simulation code and data for the paper
 
