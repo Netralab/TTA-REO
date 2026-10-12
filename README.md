@@ -1,129 +1,197 @@
-# TTA-REO: Relational Entanglement Orchestration for Quantum Networks
+# TTA-REO simulation code
 
-Simulation code and data for the paper:
+Simulation code and data for the paper
 
-> **Swarup Roy and Rupak Mukherjee**, "तत् त्वम् असि (*Tat Tvam Asi*)-Inspired Relational Entanglement Orchestration for Quantum Communication Networks," preprint, 2026. arXiv: *link to be added*
+> S. Roy and R. Mukherjee, "तत् त्वम् असि (*Tat Tvam Asi*)-Inspired Relational Entanglement
+> Orchestration for Quantum Communication Networks," preprint, 2026.
 
-Quantum networks must share fragile, short-lived entanglement among many requests that compete for the same memories and links. TTA-REO values each entangled resource by how much it raises a request's chance of being completed in time, using only the information that has actually reached the decision point. This repository contains the discrete-time simulator used in the paper, the scripts that run all four experiments, and the raw results behind every reported number.
-
-![Results](docs/results.png)
-
-*Weighted completion ratio of five allocation policies (300 seeds each, 95% confidence intervals): (a) memory at the shared node C, (b) the same with a shared generation order, (c) controller information delay, (d) link length.*
+The code simulates a small quantum network in which several entanglement requests compete
+for limited quantum memory. It compares five allocation policies and produces every number,
+table and figure reported in the paper's experimental sections.
 
 ---
 
-## Contents
+## 1. What is in this folder
 
 | File | Purpose |
 |---|---|
-| `tta_sim.py` | The simulator: network model, request generator, five policies, `simulate()`. All parameters are in `PARAMS`. |
-| `example_single_run.py` | Short worked example. Start here. |
-| `sweep.py` | Runs the paper's four experiments (300 seeds each) with bootstrap intervals and Holm-corrected Wilcoxon tests. |
-| `make_figures.py` | Builds the results figure and LaTeX table rows from the summaries. |
-| `results/` | Per-seed outcomes (`*_raw.json`) and statistics (`*_summary.json`) used in the paper. |
-| `TUTORIAL.pdf` | Step-by-step tutorial with real inputs and outputs. |
-| `requirements.txt` | Python dependencies. |
+| `tta_sim.py` | The simulator: network model, request generator, the five policies, and `simulate()`. All parameters are in the `PARAMS` dictionary at the top. |
+| `sweep.py` | Runs the four experiments of the paper (300 seeds each) and does the statistics. |
+| `make_figures.py` | Turns the experiment summaries into the results figure and the LaTeX table rows. |
+| `example_single_run.py` | A short worked example: one seed, all policies, then one changed parameter. Start here. |
+| `results/*_raw.json` | Per-seed outcomes of every policy in every setting (the data behind the paper). |
+| `results/*_summary.json` | Means, 95% bootstrap intervals and Holm-corrected Wilcoxon tests. |
+| `requirements.txt` | Python packages needed. |
 
 ---
 
-## Installation
+## 2. Installation
 
-Requires Python 3.9 or later (tested with Python 3.13, NumPy 2.5, SciPy 1.18, Matplotlib 3.11).
+Python 3.9 or later. Tested with Python 3.13, NumPy 2.5, SciPy 1.18, Matplotlib 3.11.
 
 ```bash
-git clone https://github.com/<your-username>/TTA-REO-simulation.git
-cd TTA-REO-simulation
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Quick start
+No GPU or special hardware is needed.
+
+---
+
+## 3. Quick start
 
 ```bash
 python example_single_run.py
 ```
 
-Expected output (abbreviated):
+This prints the link quantities derived from the physical parameters, the weighted completion
+ratio (WCR) of each policy on one seed, and the effect of making the controller's information
+older. It runs in a few seconds. Results on a single seed vary; the paper's conclusions rest
+on 300 seeds per setting.
 
-```
-Seed 1000, C capacity 3, 205 requests
-Policy             WCR    d1     d2     d3
-EDF-greedy       0.598  0.23   0.93   0.64
-Fidelity-greedy  0.545  0.38   0.81   0.42
-TTA-lite         0.606  0.20   0.87   0.55
-TTA-lite-noCP    0.586  0.20   0.89   0.50
-RTC-direct       0.631  0.28   0.93   0.59
-```
+---
 
-WCR is the weighted completion ratio: the share of request weight completed by its deadline. A single seed is one random sample; the paper's conclusions use 300 seeds per setting.
-
-## Reproducing the paper
+## 4. Reproducing the paper
 
 ```bash
 python sweep.py              # all four experiments, about 6 minutes on 2 CPU cores
-python make_figures.py       # figure and table rows into ./output
+python make_figures.py       # writes output/figs/results.pdf and output/tables/*.tex
 ```
 
-Or run one experiment at a time:
+You can also run a single experiment:
 
-| Command | Experiment | What varies |
-|---|---|---|
-| `python sweep.py capacity` | A | Memory at node C: 4, 3, 2, 1 qubits |
-| `python sweep.py shared` | B | As A, with one generation order shared by all policies |
-| `python sweep.py info` | C | Controller report delay: 0, 1, 2, 4, 8 slots |
-| `python sweep.py distance` | D | All link lengths × 0.5, 1, 1.5, 2 |
+| Command | Experiment | What varies | Research question |
+|---|---|---|---|
+| `python sweep.py capacity` | A | Memory at node C: 4, 3, 2, 1 qubits | RQ1, RQ2 |
+| `python sweep.py shared` | B | As A, but all policies share one random generation order | RQ2 |
+| `python sweep.py info` | C | Controller report delay: 0, 1, 2, 4, 8 slots (C = 3) | RQ3, RQ4 |
+| `python sweep.py distance` | D | All link lengths × 0.5, 1, 1.5, 2 (C = 3) | RQ3, RQ4 |
 
-The simulation is deterministic: rerunning reproduces the per-seed results in `results/` exactly.
+Each experiment writes `results/<name>_raw.json` and `results/<name>_summary.json`, replacing
+the shipped files. The simulation is deterministic: rerunning reproduces the shipped per-seed
+results exactly (this was checked for Experiment A).
 
-## Using the simulator in your own code
+To write the figure and tables straight into a LaTeX project:
+
+```bash
+python make_figures.py --out ../paper     # creates ../paper/figs and ../paper/tables
+```
+
+---
+
+## 5. The model in brief
+
+**Network.** Six nodes A–F. Links AC (20 km), CD (25 km), BE (15 km), EF (10 km),
+CF (30 km) and BC (20 km). Every node has 4 memory qubits except C, whose memory is varied.
+
+**Requests.** Each arrival is one of three types, chosen with equal probability:
+
+| Type | Target | Built from | Operation |
+|---|---|---|---|
+| d1 | A–D Bell pair | pairs on AC and CD | entanglement swap at C (needs 2 qubits at C at once) |
+| d2 | B–E–F GHZ state | pairs on BE and EF | fusion at E |
+| d3 | C–F Bell pair | one pair on CF | none |
+
+Each request has a fidelity threshold, a deadline and a priority weight (1, 2 or 3).
+
+**Time and distance.** One slot is 0.1 ms; signals travel 200 km per ms in fibre.
+
+- Link success probability per slot: `p = 0.9 × 10^(−0.2·L/10)`
+- Heralding delay: `ceil(L / 20 km)` slots. The attempt holds a memory qubit at both ends until then.
+- After a swap or fusion, the result must reach the end nodes before the request counts as complete (2 slots for d1, 1 slot for d2).
+
+**Decay.** Stored quality falls as `Q0·exp(−age/100)`, and pairs are discarded after 20 slots.
+
+**Controller information.** The controller learns a link outcome `INFO_DELAY` slots after the
+endpoints do, and cannot assign a pair before then. Nodes enforce their own memory limits with
+current local information.
+
+**Metric.** Weighted completion ratio = (sum of weights of completed requests) / (sum of
+weights of all requests).
+
+---
+
+## 6. The five policies
+
+All policies see the same arrivals and the same random outcomes for a given seed. Each policy
+gives one score, used both to decide which links to try to generate and which known pair goes
+to which request.
+
+| Name in code | Rule |
+|---|---|
+| `Fidelity-greedy` | Highest-quality pair–request match first. |
+| `EDF-greedy` | Earliest-deadline request first. |
+| `TTA-lite` | `w / n_missing × (1 + 1/(time left + 1)) − 0.05 × age/lifetime`. Favours requests that are close to completion, important and urgent. |
+| `TTA-lite-noCP` | TTA-lite without the `1/n_missing` factor (ablation). |
+| `RTC-direct` | Weight × relational task contribution, i.e. the change in the request's estimated completion probability if it receives the pair. The estimate accounts for link success rates, heralding, report and correction delays, and deadlines, but not for competition for memory. |
+
+---
+
+## 7. Changing parameters
+
+All parameters are in `PARAMS` at the top of `tta_sim.py`. To experiment without editing the
+file, copy and modify the dictionary:
 
 ```python
 import copy
 from tta_sim import PARAMS, simulate, make_workload
 
 P = copy.deepcopy(PARAMS)
-P["INFO_DELAY"] = 2                  # controller information 2 slots old
-P["EDGES"]["CF"] = (40.0, 0.92)      # CF link: 40 km, initial quality 0.92
+P["INFO_DELAY"] = 2                       # older controller information
+P["EDGES"]["CF"] = (40.0, 0.92)           # longer CF link: (length km, initial quality)
+P["ARRIVAL_RATE"] = 0.5                   # heavier load
 
-workload = make_workload(1000, P)    # requests for seed 1000
-result = simulate("TTA-lite", 1000, 3, P, workload)   # policy, seed, qubits at C
-print(result)
-# {'wcr': ..., 'n': ..., 'cr_d1': ..., 'cr_d2': ..., 'cr_d3': ...}
+wl = make_workload(1000, P)               # seed 1000
+result = simulate("TTA-lite", 1000, 3, P, wl)   # policy, seed, memory at C, params, workload
+print(result)   # {'wcr': ..., 'n': ..., 'cr_d1': ..., 'cr_d2': ..., 'cr_d3': ...}
 ```
 
-Policies: `"EDF-greedy"`, `"Fidelity-greedy"`, `"TTA-lite"`, `"TTA-lite-noCP"`, `"RTC-direct"`.
+Main parameters:
 
-## Model summary
+| Key | Meaning | Paper value |
+|---|---|---|
+| `EDGES` | Link: (length km, initial quality) | see Section 5 |
+| `P_MAX`, `ALPHA_DB_PER_KM` | Success at zero length; fibre loss | 0.90; 0.2 dB/km |
+| `TAU_SLOT_MS`, `C_FIBRE_KM_PER_MS` | Slot length; signal speed | 0.1 ms; 200 km/ms |
+| `MEM_DEFAULT` | Qubits per node (except C) | 4 |
+| `TAU_COH`, `LIFETIME` | Decay constant; discard age (slots) | 100; 20 |
+| `P_SWAP`, `P_FUSE`, `LOSS` | Operation success; quality loss per operation | 0.90, 0.85, 0.98 |
+| `ARRIVAL_RATE` | Requests per slot (Poisson) | 0.4 |
+| `DEADLINE` | Relative deadline range (slots) | 8–25 |
+| `INFO_DELAY` | Report delay to the controller (slots) | 1 |
+| `GEN_RANK` | `"policy"` or `"shared"` generation order | `"policy"` |
 
-- **Network:** six nodes A–F; links AC 20 km, CD 25 km, BE 15 km, EF 10 km, CF 30 km, BC 20 km. Four memory qubits per node; node C varied.
-- **Requests:** A–D Bell pair (swap at C), B–E–F GHZ state (fusion at E), C–F Bell pair; each with a fidelity threshold, deadline and weight.
-- **Distance and delay:** 0.1 ms slots; success probability falls with fibre loss (0.2 dB/km); heralding takes ⌈L / 20 km⌉ slots; swap and fusion outcomes must reach the end nodes before a request counts as complete.
-- **Information:** the controller learns outcomes after a report delay and can only act on what it knows.
-- **Decay:** stored quality decays exponentially; pairs are discarded after 2 ms.
+`ARRIVAL_RATE` was the only value tuned, using the Fidelity-greedy baseline alone on pilot
+seeds 0–14. The reported runs use seeds 1000–1299.
 
-See `TUTORIAL.pdf` and the paper for full details.
+---
 
-## Limitations
+## 8. Output format
 
-This is an abstract model for comparing allocation rules, not a physical-layer simulator. Quality is a scalar stand-in for fidelity, operation success rates are fixed, the report delay is uniform, and only one topology is modelled. For physical-layer studies, see [NetSquid](https://netsquid.org) or [SeQUeNCe](https://github.com/sequence-toolbox/SeQUeNCe).
+`simulate()` returns a dictionary:
 
-## Citation
+- `wcr`: weighted completion ratio for the run
+- `n`: number of requests that arrived
+- `cr_d1`, `cr_d2`, `cr_d3`: fraction of each request type completed
 
-```bibtex
-@misc{roy2026ttareo,
-  author = {Roy, Swarup and Mukherjee, Rupak},
-  title  = {Tat Tvam Asi-Inspired Relational Entanglement Orchestration for Quantum Communication Networks},
-  year   = {2026},
-  note   = {Preprint}
-}
-```
+`results/<exp>_summary.json` contains, for every setting and policy, the mean WCR, its 95%
+bootstrap interval and per-type completion rates. It also lists every pairwise comparison with
+the relative difference (%), wins/losses/ties over seeds, the raw Wilcoxon p-value and the
+Holm-adjusted p-value.
 
-## Contact
+---
 
-- Swarup Roy, Department of Computer Science and Engineering, Tezpur University — swarup@tezu.ernet.in
-- Rupak Mukherjee, Department of Physics, Sikkim University — rmukherjee@cus.ac.in
+## 9. Limitations
 
-## License
+This is an abstract discrete-time model intended to compare allocation rules. Quality is a
+scalar stand-in for fidelity (density matrices are not tracked), operation success rates are
+fixed, the report delay is the same for every node, and only one topology is studied. It is not
+a physical-layer simulator; for that, see NetSquid or SeQUeNCe.
 
-License to be added.
+---
+
+## 10. Citation
+
+If you use this code, please cite the paper above. Contact: Swarup Roy (swarup@tezu.ernet.in),
+Rupak Mukherjee (rmukherjee@cus.ac.in).
